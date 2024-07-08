@@ -3,40 +3,40 @@ import { usePagination } from '@devvit/kit';
 
 Devvit.configure({ media: true, redditAPI: true, redis: true});
 
-let localEvents: Event[];
+type Event = {
+  title: string, 
+  date: string,  
+  startTime: string,  
+  endTime: string,  
+  link: string,  
+  description: string, 
+  attending: []
+}
 
-let grabData
-
-/*
-
-*/
 Devvit.addCustomPostType({
   name: 'Name',
   render: (context) => {
 
-    const[upcomingEvents, updateEvents] = context.useState(async () => 
-      
-    {const eventsStr = await context.redis.get("eventapp") ?? "";
+    const[localEvents, setLocalEvents] = context.useState<Event[]>(async () => {
+      const eventsStr = await context.redis.get("eventapp")
 
-    localEvents = JSON.parse(eventsStr) 
+      if(!eventsStr) {
+        return []
+      }
 
-    return localEvents
+    return JSON.parse(eventsStr) 
+
     });
-
-  
 
     //when form is submitted update upcomingEvents
 
-    const onSubmit = async (values: FormValues) => {
-
-      //create new event, add to local list
-      const event = new Event(values.title, values.date, values.startTime, values.endTime, values.link, values.description, []);
-      localEvents.push(event);
+    const onSubmit = async (values: any) => {
+      const newLocalEvents: Event[] = [values, ...localEvents]
       
       //update redis data 
-      await context.redis.set("eventapp", JSON.stringify(localEvents));
+      await context.redis.set("eventapp", JSON.stringify(newLocalEvents));
     
-      updateEvents(upcomingEvents);
+      setLocalEvents(newLocalEvents);
       
       context.ui.showToast("Event created!");
 
@@ -151,9 +151,7 @@ const ItemComponent = (props:{item: Event}): JSX.Element =>{
   )};
 
 
-class Event {
-  constructor(public title: string, public date: string, public startTime: string, public endTime: string, public link: string, public description: string, public attending: []) {}
-}
+
 
 
 function getSplittingFunction(order: RenderingOrder): SplittingFunction {
