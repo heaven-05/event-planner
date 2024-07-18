@@ -1,23 +1,30 @@
-import {Devvit, RichTextBuilder, Post, RedditAPIClient, FormValues} from '@devvit/public-api'
+import {Devvit, RichTextBuilder, Post, FormValues, User} from '@devvit/public-api'
 import { usePagination } from '@devvit/kit';
+import { RedditAPIClient } from '@devvit/public-api';
 
 Devvit.configure({ media: true, redditAPI: true, redis: true});
 
-type Event = {
+
+  
+type Meet = {
   title: string, 
   date: string,  
   startTime: string,  
   endTime: string,  
   link: string,  
   description: string, 
-  attending: []
+  attending: string[]  
 }
 
 Devvit.addCustomPostType({
   name: 'Name',
-  render: (context) => {
+  render: async (context) => {
 
-    const[localEvents, setLocalEvents] = context.useState<Event[]>(async () => {
+  const { reddit, ui } = context;
+  const currentSubreddit = await reddit.getCurrentSubreddit();
+
+
+    const[localEvents, setLocalEvents] = context.useState<Meet[]>(async () => {
       const eventsStr = await context.redis.get("eventapp")
 
       if(!eventsStr) {
@@ -31,7 +38,16 @@ Devvit.addCustomPostType({
     //when form is submitted update upcomingEvents
 
     const onSubmit = async (values: any) => {
-      const newLocalEvents: Event[] = [values, ...localEvents]
+      const event: Meet = {
+        title: values.title,
+        date: values.date,
+        startTime: values.startTime,
+        endTime: values.endTime,
+        link: values.link,
+        description: values.description,
+        attending: []
+      };      
+      const newLocalEvents: Meet[] = [event, ...localEvents]
       
       //update redis data 
       await context.redis.set("eventapp", JSON.stringify(newLocalEvents));
@@ -42,8 +58,130 @@ Devvit.addCustomPostType({
 
     };
 
+      //if user in event.attending
+
+    const userAttendingEvent = async(data: string[]) => {
+      const person = await reddit.getCurrentUser();
+      if (person) {
+      const user = person.username
+      const usertag = JSON.stringify(user) 
+      return await data.includes(usertag)
+    }
+      else
+    {
+      console.log("User not detected")
+      return false
+    }}
+
+    const RSVP = async(data:Meet ) =>{        
+      const isUserAttending = await userAttendingEvent(data.attending);      
+      const person = await reddit.getCurrentUser();
+      if (person) {
+      const user = person.username 
+      const usertag = JSON.stringify(user) 
+      if (usertag) {
+        if(isUserAttending){
+          const newAttending = data.attending.filter(users => users !== usertag)
+          data.attending = newAttending
+          console.log("current user attending event: expecting false", await userAttendingEvent(newAttending))
+        }
+        else{
+        data.attending.push(usertag)
+        console.log("current user attending event: expecting true", await userAttendingEvent(data.attending))
+        }
+      }    }
+      console.log("users attending event", data.attending)
+      
+          
+      //data.attending = newList
+      //grab title, date, start time, link from event
+      //create reminder trigger
+      //rerender events (userAttendingEvent)
+      
+
+      }
+
+    const RSVP_NOTIF = 'reminder';
+
+    // Devvit.addSchedulerJob{
+    //   name: RSVP_NOTIF,
+    //   onRun: async (event, context) => {
+    //     const {userId, }
+    //   }
+    // }
+
+    //when user presses delete event
+    const deleteEvent = async (data: any) => {
+      console.log(data);
+      console.log(localEvents);
+
+      const newLocalEvents: Meet[] = localEvents.filter(event => event !== data);
+      
+      //update redis data 
+      await context.redis.set("eventapp", JSON.stringify(newLocalEvents));
+    
+      setLocalEvents(newLocalEvents);
+      console.log(newLocalEvents);
+
+      context.ui.showToast("Event deleted!");
+      
+    };
+
     const {currentPage, currentItems, toNextPage, toPrevPage} = usePagination(context, localEvents, 3);
-  
+
+    const ItemComponent = (props:{item: Meet}): JSX.Element =>{
+    return (
+      <vstack>
+        
+
+
+          <hstack>
+            
+            <vstack>
+            <hstack gap='small'>
+              <text size='xxlarge' weight='bold'>{props.item.title}</text>
+              <button size="small" icon="info" onPress={() => context.ui.showForm(infoForm, props.item)}/> 
+              <button size="small" icon="delete" onPress={() => deleteEvent(props.item)}/> 
+            </hstack>         
+              <vstack>
+              <text weight='bold'>{props.item.date}</text>
+            </vstack>   
+            </vstack>
+              
+              <hstack alignment="end middle" grow gap='small'>
+                <text alignment="end" size='xxlarge'>{props.item.startTime}</text>
+                <button icon="notification" size="small" onPress={() => RSVP(props.item)}></button>
+              </hstack>        
+        </hstack>
+        <vstack backgroundColor='#F1F1F1' height="2px">
+
+        </vstack>
+        </vstack>
+
+        
+    )};
+
+    const infoForm = context.useForm(
+      (data) => {
+        return {
+          fields: [
+            {
+              label:`${data.startTime}-${data.endTime}`,
+              type: 'paragraph',
+              name: 'Description',
+              defaultValue: data.description,
+              disabled: true
+            },
+          ],      
+          acceptLabel: 'Edit',
+          cancelLabel: 'Back',
+
+        };
+          
+      },
+      onSubmit
+    );
+
     const eventForm = context.useForm(
       {
         title: 'Add Event',
@@ -51,22 +189,26 @@ Devvit.addCustomPostType({
           {
             type: 'string',
             name: 'title',
-            label: 'Event Title: MUST be unique',
+            helpText: 'MUST be unique',
+            label: 'Event Title',
           },
           {
             type: 'string',
             name: 'date',
             label: 'Date',
           },
+
           {
             type: 'string',
             name: 'startTime',
-            label: 'Start Time ex. 00:00 ET OR "All Day"',
+            label: 'Start Time',
+            helpText: 'ex. 00:00 ET OR "All Day"',
           },
           {
             type: 'string',
             name: 'endTime',
-            label: 'End Time ex. 00:00 ET',
+            label: 'End Time', 
+            helpText: 'ex. 00:00 ET',
           },
           {
             type: 'string',
@@ -74,7 +216,7 @@ Devvit.addCustomPostType({
             label: 'Link',
           },
           {
-            type: 'string',
+            type: 'paragraph',
             name: 'description',
             label: 'Description',
           },
@@ -93,7 +235,15 @@ Devvit.addCustomPostType({
           backgroundColor = "#003285"
         > 
         <hstack padding='small' alignment='middle'>
-            <text color='white' size='xxlarge' weight='bold'>r/1234567890123456789012</text>
+        <blocks>
+            <image
+                imageHeight={50}
+                imageWidth={50}
+                //i.reddit.com
+                url="https://www.reddit.com/media?url=https%3A%2F%2Fpreview.redd.it%2Fphoto-to-test-things-v0-0ffb0mzzvq7d1.png%3Fauto%3Dwebp%26s%3D2bb151094491773b27963ffa8befeff8693f859a"
+             />
+             </blocks>
+            <text color='white' size='xxlarge' weight='bold'>r/{currentSubreddit.name}</text>
 
             <zstack grow alignment='end middle'>
             <button size="medium" onPress={() => context.ui.showForm(eventForm)}> Add Event </button>
@@ -119,36 +269,22 @@ Devvit.addCustomPostType({
 
 
 
-const ItemComponent = (props:{item: Event}): JSX.Element =>{
-  return (
-    <vstack>
-      
 
 
-        <hstack>
-          
-          <vstack>
-          <hstack gap='small'>
-            <text size='xxlarge' weight='bold'>{props.item.title}</text>
-            <button size="small" icon="info" /> 
-          </hstack>         
-            <vstack>
-            <text weight='bold'>{props.item.date}</text>
-          </vstack>   
-          </vstack>
-            
-            <hstack alignment="end middle" grow gap='small'>
-              <text alignment="end" size='xxlarge'>{props.item.startTime}</text>
-              <button icon="notification" size="small"></button>
-            </hstack>        
-      </hstack>
-      <vstack backgroundColor='#F1F1F1' height="2px">
 
-      </vstack>
-      </vstack>
 
-      
-  )};
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -282,6 +418,12 @@ export type ColumnsProps = {
 };
 
 export type SplittingFunction = <T>(input: T[], columns: number, maxRows: number) => T[][]
+
+
+
+
+
+
 
 
 

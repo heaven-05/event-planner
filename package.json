@@ -6,7 +6,8 @@
   "type": "module",
   "dependencies": {
     "@devvit/kit": "^1.1.2",
-    "@devvit/public-api": "^0.10.22"
+    "@devvit/public-api": "^0.10.22",
+    "chrono-node": "^2.7.6"
   },
   "devDependencies": {
     "@devvit/tsconfig": "0.10.22",
