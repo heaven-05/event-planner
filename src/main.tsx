@@ -238,13 +238,7 @@ Devvit.addCustomPostType({
               </text>
               <button
                 icon={
-                  (await userAttendingEvent(
-                    props.item.attending,
-                    props.item.title
-                  ))
-                    ? "notification-frequent-fill"
-                    : "notification"
-                }
+                  (await userAttendingEvent(props.item.attending, props.item.title))  ? "notification-frequent-fill" : "notification"}
                 size="small"
                 onPress={() => RSVP(props.item)}
               />{" "}
