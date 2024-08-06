@@ -47,6 +47,8 @@ const userAttendingEvent = ({
 
 const RSVP_NOTIF = "reminder";
 
+
+/** scheduler to DM users a reminder */
 Devvit.addSchedulerJob({
   name: RSVP_NOTIF,
   onRun: async (event, context) => {
@@ -239,6 +241,8 @@ Devvit.addCustomPostType({
           }
         
       }    };
+
+       /** function to create scheduler for event reminder */
 
       async function remindUser(event: Meet, context: Devvit.Context) {
         const whenStr = `15 minutes prior to ${event.startTime} ${event.date}`|| '';
