@@ -352,6 +352,11 @@ Devvit.addCustomPostType({
       <vstack>
         <vstack width="100%" height="64px" backgroundColor="#003285">
           <hstack padding="small" alignment="middle">
+              <image
+                imageHeight={50}
+                imageWidth={50}
+                //i.reddit.com
+              url="https://i.redd.it/0ffb0mzzvq7d1.png"              />
             <text color="white" size="xxlarge" weight="bold">
               r/{currentSubreddit.name}
             </text>
