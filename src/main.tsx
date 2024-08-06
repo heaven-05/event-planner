@@ -5,10 +5,11 @@ import {
   FormValues,
   User,
   FormOnSubmitEvent,
-  FormKey
+  FormKey,
+  RedditAPIClient,
+  SettingScope
 } from "@devvit/public-api";
 import { usePagination } from "@devvit/kit";
-import { RedditAPIClient } from "@devvit/public-api";
 import * as chrono from "chrono-node";
 
 Devvit.configure({ media: true, redditAPI: true, redis: true });
@@ -23,6 +24,15 @@ type Meet = {
   description: string;
   attending: string[];
 };
+
+//Date arithmetic 
+function get15MinsBefore(date: Date | null): Date {
+  if (date) {
+    return new Date(date.getTime() - 15 * 60 * 1000);
+  } else {
+    throw new Error('Invalid date');
+  }
+}
 
 //function returning true/false if user is in event.attending
 const userAttendingEvent = ({
@@ -245,13 +255,14 @@ Devvit.addCustomPostType({
        /** function to create scheduler for event reminder */
 
       async function remindUser(event: Meet, context: Devvit.Context) {
-        const whenStr = `15 minutes prior to ${event.startTime} ${event.date}`|| '';
+        const whenStr = `${event.startTime} ${event.date}`|| '';
         if (!whenStr) {
           context.ui.showToast("Error: Invalid time format");
           return;
         }
 
-        const parsedTime = chrono.parseDate(whenStr);
+        const parsedTime = get15MinsBefore(chrono.parseDate(whenStr));
+        console.log(parsedTime);
         const now = new Date();
 
         if (parsedTime)
