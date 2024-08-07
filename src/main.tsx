@@ -14,6 +14,52 @@ import * as chrono from "chrono-node";
 
 Devvit.configure({ media: true, redditAPI: true, redis: true });
 
+//settings
+Devvit.addSettings([  
+  {
+    type: 'select',
+    name: 'canCreateEvent',
+    label: 'Who can create/delete events:',
+    options: [
+      {
+        label: 'Mods Only',
+        value: 'moderator',
+      },
+      {
+        label: 'All Members',
+        value: "['member', 'moderator']",
+      },
+    ],
+    multiSelect: false,
+  },
+  {
+    type: 'select',
+    name: 'canRsvpEvent',
+    label: 'Who can RSVP to events:',
+    options: [
+      {
+        label: 'Mods Only',
+        value: 'moderator',
+      },
+      {
+        label: 'All Members',
+        value: "['member', 'moderator']",
+      },
+    ],
+    multiSelect: false,
+  },
+  {
+    type: 'string',
+    name: 'headerImage',
+    label: 'Enter the image URL for your header:',
+    onValidate: async ({ value }) => {
+      if (value && !value.includes('i.redd.it')) {
+        return 'URL must contain "i.redd.it"';
+      }
+    },
+  },
+]);
+
 //event object
 type Meet = {
   title: string;
@@ -62,18 +108,30 @@ const RSVP_NOTIF = "reminder";
 Devvit.addSchedulerJob({
   name: RSVP_NOTIF,
   onRun: async (event, context) => {
-    const data = event.data!.data as Meet;
-
-    // Iterate over the 'attending' array
-    for (const username of data.attending) {
-      await context.reddit.sendPrivateMessage({
-        to: username, 
-        subject: "Event Reminder",
-        text: `Hello! ${data.title} is starting soon! ${data.link}`,
-      });
+    console.log('Job triggered');
+    const redisEvents = await context.redis.get("eventapp");
+    if (redisEvents){
+      const events = JSON.parse(redisEvents);
+      const data = events.find((occasion: Meet) => occasion.title === occasion.title);
+      console.log('Event found:', data);
+      if (data) {
+        for (const username of data.attending) {
+          console.log('Sending message to:', username);
+          try {
+            await context.reddit.sendPrivateMessage({
+              to: username, 
+              subject: "Event Reminder",
+              text: `Hello! ${data.title} is starting soon! ${data.link}`,
+            });
+            console.log('Message sent to:', username);
+          } catch (error) {
+            console.error('Failed to send message to:', username, error);
+          }
+        }
+      }
     }
-  },
-});
+  }},
+);
 
 //formatting of how event items displayed onto app
 const ItemComponent: Devvit.BlockComponent<{
@@ -204,34 +262,37 @@ Devvit.addCustomPostType({
     };
 
     /** function to add users to an event's attending list */
-    const RSVP = async (_event: Meet) => {
-      const event = { ..._event };
-
+    const RSVP = async (event: Meet) => {
+    
       const isUserAttending = userAttendingEvent({
         currentUsername,
         attendingUsersList: event.attending,
         eventTitle: event.title,
       });
-  
-        if (currentUsername) {
-          //if the user is already attending event, and the function is called, unRSVP
-          if (isUserAttending) {
-            const newAttending = event.attending.filter(
-              (users) => users !== currentUsername );
-            event.attending = newAttending;
-            console.log(
-              "current user attending event: expecting false",
-              userAttendingEvent({
-                currentUsername,
-                attendingUsersList: event.attending,
-                eventTitle: event.title,
-              })
-            );
-            const newLocalEvents: Meet[] = [...localEvents];
-            await context.redis.set("eventapp", JSON.stringify(newLocalEvents));
-
-            setLocalEvents(newLocalEvents);
-          }
+    
+      if (currentUsername) {
+        //if the user is already attending event, and the function is called, unRSVP
+        if (isUserAttending) {
+          const newAttending = event.attending.filter(
+            (users) => users !== currentUsername );
+          event.attending = newAttending;
+          console.log(
+            "current user attending event: expecting false",
+            userAttendingEvent({
+              currentUsername,
+              attendingUsersList: event.attending,
+              eventTitle: event.title,
+            })
+          );
+      
+          // Create a new copy of localEvents
+          const newLocalEvents: Meet[] = [...localEvents];
+    
+          await context.redis.set("eventapp", JSON.stringify(newLocalEvents));
+    
+          setLocalEvents(newLocalEvents);
+        }
+      
 
           //if the user is not attending the event, add them to the attending list
           else {
@@ -564,6 +625,7 @@ Devvit.addMenuItem({
   onPress: async (_, context) => {
     const { reddit, ui } = context;
     const currentSubreddit = await reddit.getCurrentSubreddit();
+    const appIcon = await context.settings.get('headerImage');
     await reddit.submitPost({
       title: "Events Board",
       subredditName: currentSubreddit.name,
