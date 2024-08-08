@@ -118,11 +118,12 @@ Devvit.addSchedulerJob({
         for (const username of data.attending) {
           console.log('Sending message to:', username);
           try {
-            await context.reddit.sendPrivateMessage({
+            let response = await context.reddit.sendPrivateMessage({
               to: username, 
               subject: "Event Reminder",
               text: `Hello! ${data.title} is starting soon! ${data.link}`,
             });
+            console.log(response)
             console.log('Message sent to:', username);
           } catch (error) {
             console.error('Failed to send message to:', username, error);
@@ -207,6 +208,14 @@ Devvit.addCustomPostType({
       };
     });
     
+    const sendMessage = async (event: Meet) => {
+       if (currentUsername){await context.reddit.sendPrivateMessage({
+       
+        to: "undefined-variable-x", 
+        subject: "Event Reminder",
+        text: `Hello! ${event.title} is starting soon! ${event.link}`,
+      })
+    }}
 
     //function to rerender events when list of events is updated
     const [localEvents, setLocalEvents] = context.useState<Meet[]>(async () => {
@@ -298,6 +307,9 @@ Devvit.addCustomPostType({
           else {
             event.attending.push(currentUsername);
             const newLocalEvents: Meet[] = [...localEvents];
+            console.log("sending message")
+            await sendMessage(event);
+            console.log("message sent")
             await context.redis.set("eventapp", JSON.stringify(newLocalEvents));
             setLocalEvents(newLocalEvents);
             console.log(
@@ -306,7 +318,8 @@ Devvit.addCustomPostType({
                 currentUsername,
                 attendingUsersList: event.attending,
                 eventTitle: event.title,
-              })
+              }),
+
             );
             
           }
