@@ -72,7 +72,7 @@ type Meet = {
 };
 
 //Date arithmetic 
-function get15MinsBefore(date: Date | null): Date {
+export function get15MinsBefore(date: Date | null): Date {
   if (date) {
     return new Date(date.getTime() - 15 * 60 * 1000);
   } else {
@@ -109,7 +109,8 @@ Devvit.addSchedulerJob({
   name: RSVP_NOTIF,
   onRun: async (event, context) => {
     console.log('Job triggered');
-    const redisEvents = await context.redis.get("eventapp");
+    const currentSubreddit = await context.reddit.getCurrentSubreddit();
+    const redisEvents = await context.redis.get(`eventapp${currentSubreddit.name}`);
     if (redisEvents){
       const events = JSON.parse(redisEvents);
       const data = events.find((occasion: Meet) => occasion.title === occasion.title);
@@ -204,22 +205,15 @@ Devvit.addCustomPostType({
       const currentSubreddit = await reddit.getCurrentSubreddit();
       
       return {
-        name: currentSubreddit.name,
+        name:currentSubreddit.name,
       };
     });
     
-    const sendMessage = async (event: Meet) => {
-       if (currentUsername){await context.reddit.sendPrivateMessage({
-       
-        to: "undefined-variable-x", 
-        subject: "Event Reminder",
-        text: `Hello! ${event.title} is starting soon! ${event.link}`,
-      })
-    }}
+
 
     //function to rerender events when list of events is updated
     const [localEvents, setLocalEvents] = context.useState<Meet[]>(async () => {
-      const eventsStr = await context.redis.get("eventapp");
+      const eventsStr = await context.redis.get(`eventapp${currentSubreddit.name}`);
 
       if (!eventsStr) {
         return [];
@@ -237,7 +231,7 @@ Devvit.addCustomPostType({
       const newLocalEvents: Meet[] = localEvents.filter(
         (event) => event !== data
       );
-      await context.redis.set("eventapp", JSON.stringify(newLocalEvents));
+      await context.redis.set(`eventapp${currentSubreddit.name}`, JSON.stringify(newLocalEvents));
 
       setLocalEvents(newLocalEvents);
 
@@ -261,7 +255,7 @@ Devvit.addCustomPostType({
       const newLocalEvents: Meet[] = [event, ...localEvents];
 
       //update redis data
-      await context.redis.set("eventapp", JSON.stringify(newLocalEvents));
+      await context.redis.set(`eventapp${currentSubreddit.name}`, JSON.stringify(newLocalEvents));
 
       setLocalEvents(newLocalEvents);
 
@@ -297,7 +291,7 @@ Devvit.addCustomPostType({
           // Create a new copy of localEvents
           const newLocalEvents: Meet[] = [...localEvents];
     
-          await context.redis.set("eventapp", JSON.stringify(newLocalEvents));
+          await context.redis.set(`eventapp${currentSubreddit.name}`, JSON.stringify(newLocalEvents));
     
           setLocalEvents(newLocalEvents);
         }
@@ -307,10 +301,7 @@ Devvit.addCustomPostType({
           else {
             event.attending.push(currentUsername);
             const newLocalEvents: Meet[] = [...localEvents];
-            console.log("sending message")
-            await sendMessage(event);
-            console.log("message sent")
-            await context.redis.set("eventapp", JSON.stringify(newLocalEvents));
+            await context.redis.set(`eventapp${currentSubreddit.name}`, JSON.stringify(newLocalEvents));
             setLocalEvents(newLocalEvents);
             console.log(
               "current user attending event: expecting true",
@@ -481,7 +472,7 @@ Devvit.addCustomPostType({
   },
 });
 
-//lines 368-517 are exported functions for pagination and other devvit formatting tools
+//exported functions for pagination and other devvit formatting tools
 function getSplittingFunction(order: RenderingOrder): SplittingFunction {
   if (order === "column") {
     return splitItems;
